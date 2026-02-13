@@ -1,0 +1,14 @@
+# Directories
+.vs
+out
+enc_temp_folder
+
+# Files
+*.user
+
+## Ignore Visual Studio solution/project files
+*.sln
+*.vcxproj*
+
+*.pyc
+*.lib

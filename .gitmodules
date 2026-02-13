@@ -1,0 +1,3 @@
+[submodule "vendor/nyx"]
+	path = vendor/nyx
+	url = https://github.com/ejt1/nyx

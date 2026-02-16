@@ -44,6 +44,7 @@ using dolos::OffsetType;
 #define D2R_OFFSET_LIST(V)                                                                                             \
   V(D2Allocator, "48 8B 0D ^ ? ? ? 8B F8 48 85 C9")                                                                    \
   V(BcAllocator, "E8 ^ ? ? ? 33 DB 48 89 05")                                                                          \
+  V(kAutoLimit, "48 8B 05 ^ ? ? ? 48 85 C0 75 ? C6 45")                                                                \
                                                                                                                        \
   /* Maphack offsets */                                                                                                \
   V(DRLG_AllocLevel, "E8 ^ ? ? ? 48 8B D8 83 3B")                                                                      \
@@ -55,6 +56,7 @@ using dolos::OffsetType;
   V(ClearLinkedList, "E8 ^ ? ? ? 48 8D 3D ? ? ? ? 48 8D 2D")                                                           \
   V(AUTOMAP_NewAutomapCell, "E8 ^ ? ? ? 48 8B 75 ? 48 85 F6 0F 84 ? ? ? ? E8 ? ? ? ? 8D 57")                           \
   V(AUTOMAP_AddAutomapCell, "E8 ^ ? ? ? 4D 89 1F")                                                                     \
+  V(AutoMapPanel_GetMode, "E8 ^ ? ? ? 83 F8 ? 75 ? 33 D2 48 8B CF")                                                    \
                                                                                                                        \
   /* Data table offsets*/                                                                                              \
   V(sgptDataTbls, "48 8D 15 ^ ? ? ? 49 8B 9E")                                                                         \
@@ -78,6 +80,22 @@ constexpr std::size_t kOffsetCount = 0
     D2R_OFFSET_LIST(COUNT_OFFSET)
 #undef COUNT_OFFSET
     ;
+
+struct AutoLimitFixer {
+  AutoLimitFixer() : ptr(*static_cast<uint64_t**>(kAutoLimit)), old_min(ptr[1]), old_delta(ptr[0]) {
+    ptr[1] = 0;
+    ptr[0] = 0x7FFFFFFFFFFFFFF;
+  }
+
+  ~AutoLimitFixer() {
+    ptr[1] = old_min;
+    ptr[0] = old_delta;
+  }
+
+  uint64_t* ptr;
+  uint64_t old_min;
+  uint64_t old_delta;
+};
 
 bool InitializeOffsets();
 bool ValidateOffsets();

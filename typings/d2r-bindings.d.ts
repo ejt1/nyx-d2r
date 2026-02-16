@@ -11,6 +11,11 @@ declare function internalBinding(module: 'd2r'): {
   log(message: string): void;
 
   /**
+   * Gets the current Automap mode, if it's fullscreen (0), top-left (1) or top-right (2)
+   */
+  automapGetMode(): number;
+
+  /**
    * Reveal a level on the map
    * @param levelId The level ID to reveal
    * @returns true if successful

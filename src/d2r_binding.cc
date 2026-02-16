@@ -22,6 +22,11 @@ using v8::Local;
 using v8::ObjectTemplate;
 using v8::Value;
 
+void AutomapGetMode(const FunctionCallbackInfo<Value>& args) {
+  AutoLimitFixer alf;
+  args.GetReturnValue().Set(reinterpret_cast<uint32_t (*)()>(AutoMapPanel_GetMode)());
+}
+
 void RevealLevel(const FunctionCallbackInfo<Value>& args) {
   Isolate* isolate = args.GetIsolate();
   Environment* env = Environment::GetCurrent(isolate);
@@ -78,6 +83,7 @@ void InitD2RBinding(nyx::IsolateData* isolate_data, Local<ObjectTemplate> target
     PIPE_LOG(*utf8);
   });
 
+  nyx::SetMethod(isolate, target, "automapGetMode", AutomapGetMode);
   nyx::SetMethod(isolate, target, "revealLevel", RevealLevel);
   nyx::SetMethod(isolate, target, "getPlayerIdByIndex", GetPlayerIdByIndex);
   nyx::SetMethod(isolate, target, "getLocalPlayerIndex", GetLocalPlayerIndex);

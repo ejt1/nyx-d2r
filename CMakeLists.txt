@@ -19,6 +19,7 @@ set(NYX_D2R_SOURCES
   src/decryption_stub.asm
   src/main.cc
   src/offsets.cc
+  src/retcheck_bypass.cc
 )
 
 add_library(nyx.d2r SHARED ${NYX_D2R_SOURCES})

@@ -23,8 +23,8 @@ using v8::ObjectTemplate;
 using v8::Value;
 
 void AutomapGetMode(const FunctionCallbackInfo<Value>& args) {
-  AutoLimitFixer alf;
-  args.GetReturnValue().Set(reinterpret_cast<uint32_t (*)()>(AutoMapPanel_GetMode)());
+  args.GetReturnValue().Set(AutoMapPanel_GetMode());
+}
 }
 
 void RevealLevel(const FunctionCallbackInfo<Value>& args) {

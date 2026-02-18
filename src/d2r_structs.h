@@ -2,11 +2,28 @@
 
 #include <cstdint>
 #include <string>
+#include "retcheck_bypass.h"
 
 namespace d2r {
 
 inline void* D2Allocator;
 inline void* BcAllocator;
+
+constexpr size_t kConstantOffset = 0xC6;
+
+struct RetCheckData {
+  uint8_t* constants;
+  struct ReturnAddresses {
+    uint32_t* ptr;
+    uint32_t count;
+  }* addresses;
+  char pad_0010[8];
+  struct ImageData {
+    uint64_t size;
+    void* base;
+  }* range;
+};
+inline RetCheckData* kCheckData;
 
 struct D2ActiveRoomStrc;
 struct D2DrlgLevelStrc;
@@ -20,6 +37,8 @@ class vector {
   char pad_0008[16];  // 0x0008
 };  // Size: 0x0018
 static_assert(sizeof(vector<void*>) == 0x18);
+
+inline RetcheckFunction<uint32_t> AutoMapPanel_GetMode;
 
 template <typename T>
 class D2LinkedList {

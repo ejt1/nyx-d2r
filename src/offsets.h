@@ -44,9 +44,10 @@ using dolos::OffsetType;
 //   "E8 ^ ? ? ?" - CALL with relative offset
 //   "48 89 5C 24 ? 48 89 74 24 ?" - Function prologue (no ^)
 #define D2R_OFFSET_LIST(V)                                                                                             \
+  /* Advanced offsets */                                                                                               \
   V(D2Allocator, "48 8B 0D ^ ? ? ? 8B F8 48 85 C9")                                                                    \
   V(BcAllocator, "E8 ^ ? ? ? 33 DB 48 89 05")                                                                          \
-  V(kAutoLimit, "48 8B 05 ^ ? ? ? 48 85 C0 75 ? C6 45")                                                                \
+  V(kCheckData, "48 8B 05 ^ ? ? ? 41 80 F0")                                                                           \
                                                                                                                        \
   /* Maphack offsets */                                                                                                \
   V(DRLG_AllocLevel, "E8 ^ ? ? ? 48 8B D8 83 3B")                                                                      \
@@ -78,22 +79,6 @@ constexpr std::size_t kOffsetCount = 0
     D2R_OFFSET_LIST(COUNT_OFFSET)
 #undef COUNT_OFFSET
     ;
-
-struct AutoLimitFixer {
-  AutoLimitFixer() : ptr(*static_cast<uint64_t**>(kAutoLimit)), old_min(ptr[1]), old_delta(ptr[0]) {
-    ptr[1] = 0;
-    ptr[0] = 0x7FFFFFFFFFFFFFF;
-  }
-
-  ~AutoLimitFixer() {
-    ptr[1] = old_min;
-    ptr[0] = old_delta;
-  }
-
-  uint64_t* ptr;
-  uint64_t old_min;
-  uint64_t old_delta;
-};
 
 bool InitializeOffsets();
 bool ValidateOffsets();

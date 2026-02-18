@@ -19,6 +19,7 @@ inline void RetcheckFunction<R, Args...>::DoCall(R* result, Args... args) {
         PIPE_LOG("Call failed: Could not patch return check");
         return;
       }
+      //bypass.ValidateReturnAddressValid(reinterpret_cast<uintptr_t>(call_site));
     }
     if constexpr (!std::is_void_v<R>) {
       *result = cur_fn(args...);

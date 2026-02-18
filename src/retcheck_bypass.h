@@ -2,7 +2,6 @@
 
 #include <nyx/util.h>
 #include <cstdint>
-#include <vector>
 
 namespace d2r {
 
@@ -13,14 +12,13 @@ class RetcheckBypass {
 
   bool Patch(uintptr_t return_address);
   bool Restore();
-  void IsReturnAddressValid(uintptr_t retaddr);
+  void ValidateReturnAddressValid(uintptr_t retaddr);
 
   bool is_backed_up() { return original_address_table_ptr_ != 0; }
 
  private:
   bool Backup();
 
-  std::vector<uint32_t> patched_array_;
   uintptr_t original_address_table_ptr_;
   uint64_t original_image_base_;
   uint64_t original_image_size_;

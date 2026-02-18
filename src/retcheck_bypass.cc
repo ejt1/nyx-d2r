@@ -2,12 +2,17 @@
 
 #include "offsets.h"
 
+#include <Windows.h>
 #include <dolos/pipe_log.h>
 #include <nyx/util.h>
 #include <algorithm>
 #include <bit>
+#include <vector>
 
 namespace d2r {
+
+static std::vector<uint32_t> s_patched_array;
+static RetCheckData::ReturnAddresses s_replacement_table;
 
 static const uint8_t sbox_30[16] = {
     0x05, 0x01, 0x0D, 0x09, 0x04, 0x02, 0x0B, 0x03, 0x0A, 0x07, 0x0C, 0x0E, 0x00, 0x06, 0x08, 0x0F};
@@ -42,6 +47,15 @@ static uint32_t obfuscate_return_address(uintptr_t retaddr, uintptr_t image_base
   return v9;
 }
 
+static uint32_t deobfuscate_return_address(uint32_t obfuscated, uint32_t constant) {
+  uint32_t v20 = obfuscated ^ 0x95BE951C;
+  uint32_t v8 = apply_sbox(v20, sbox_30);  // inv(sbox_10) = sbox_30
+  uint32_t v21 = (v8 + 0x23CC70) ^ constant;
+  uint32_t transformed = (v21 ^ 0x7F8AA577) - 0x23CC70;
+  uint32_t original_v21 = apply_sbox(transformed, sbox_10);  // inv(sbox_30) = sbox_10
+  return original_v21 ^ 0x95BE951C;
+}
+
 static uint32_t get_constant_at_index(uint8_t* constants, size_t index) {
   return *reinterpret_cast<uint32_t*>(&constants[index]);
 }
@@ -69,22 +83,40 @@ bool RetcheckBypass::Patch(uintptr_t return_address) {
 
   PIPE_LOG_TRACE("Patching integrity table:");
   PIPE_LOG_TRACE("  Return Address: 0x{:016X}", return_address);
-  PIPE_LOG_TRACE("  Image Base: 0x{:016X}", image_data->base);
+  PIPE_LOG_TRACE("  Image Base: 0x{:p}", image_data->base);
   PIPE_LOG_TRACE("  Image Size: 0x{}", image_data->size);
   PIPE_LOG_TRACE("  Constant at +0x{:04X}: 0x{:08X}", kConstantOffset, constant);
   PIPE_LOG_TRACE("  Obfuscated Value: 0x{:08X}", obfuscated);
+  PIPE_LOG_TRACE("  Address table pointer: {:p}", (void*)data_ptr->addresses->ptr);
+  PIPE_LOG_TRACE("  Address table count: {}", data_ptr->addresses->count);
 
-  patched_array_.clear();
-  patched_array_.push_back(obfuscated);
+  // fixme: should only copy then only insert since game table never changes
+  // right now it reconstructs the replacement table every time a retcheck bypass function is called.
+  if (data_ptr->addresses != &s_replacement_table) {
+    uintptr_t real_image_base = reinterpret_cast<uintptr_t>(GetModuleHandle(nullptr));
+    s_patched_array.clear();
+    s_patched_array.reserve(address_table->count);
+    for (uint32_t i = 0; i < address_table->count; ++i) {
+      uint32_t offset = deobfuscate_return_address(address_table->ptr[i], constant);
+      uintptr_t retaddr = real_image_base + offset;
+      s_patched_array.push_back(obfuscate_return_address(retaddr, stored_image_base, constant));
+    }
+    std::sort(s_patched_array.begin(), s_patched_array.end());
+  }
 
-  PIPE_LOG_TRACE("  Allocated new table at: 0x{:016X}", reinterpret_cast<uintptr_t>(patched_array_.data()));
+  auto it = std::lower_bound(s_patched_array.begin(), s_patched_array.end(), obfuscated);
+  if (it == s_patched_array.end() || *it != obfuscated) {
+    PIPE_LOG_TRACE("Inserting {:04X} into valid return address table", obfuscated);
+    s_patched_array.insert(it, obfuscated);
+  }
 
-  RetCheckData::ReturnAddresses* replacement_address_table = new RetCheckData::ReturnAddresses;
-  replacement_address_table->ptr = patched_array_.data();
-  replacement_address_table->count = patched_array_.size();
-  data_ptr->addresses = replacement_address_table;
+  PIPE_LOG_TRACE("  Reusing global table at: 0x{:016X}", reinterpret_cast<uintptr_t>(s_patched_array.data()));
 
-  PIPE_LOG_TRACE("Table pointer updated successfully ({} entries)", patched_array_.size());
+  s_replacement_table.ptr = s_patched_array.data();
+  s_replacement_table.count = static_cast<uint32_t>(s_patched_array.size());
+  data_ptr->addresses = &s_replacement_table;
+
+  PIPE_LOG_TRACE("Table pointer updated successfully ({} entries)", s_patched_array.size());
   return true;
 }
 
@@ -100,15 +132,12 @@ bool RetcheckBypass::Restore() {
   PIPE_LOG_TRACE("  Original Image size: 0x{}", original_image_size_);
 
   RetCheckData* data_ptr = kCheckData;
-  delete data_ptr->addresses;
   data_ptr->addresses = reinterpret_cast<RetCheckData::ReturnAddresses*>(original_address_table_ptr_);
   data_ptr->range->base = reinterpret_cast<void*>(original_image_base_);
   data_ptr->range->size = original_image_size_;
 
-  if (!patched_array_.empty()) {
-    PIPE_LOG_TRACE("Freeing patched table at: 0x{:016X}", reinterpret_cast<uintptr_t>(patched_array_.data()));
-    patched_array_.clear();
-  }
+  PIPE_LOG_TRACE("Clearing global patched table ({} entries)", s_patched_array.size());
+  s_patched_array.clear();
 
   original_image_size_ = 0;
   original_image_base_ = 0;
@@ -118,7 +147,7 @@ bool RetcheckBypass::Restore() {
   return true;
 }
 
-void RetcheckBypass::IsReturnAddressValid(uintptr_t retaddr) {
+void RetcheckBypass::ValidateReturnAddressValid(uintptr_t retaddr) {
   RetCheckData* data = kCheckData;
   const uintptr_t image_base = reinterpret_cast<uintptr_t>(data->range->base);
   const uint32_t constant = get_constant_at_index(data->constants, kConstantOffset);
@@ -141,7 +170,7 @@ void RetcheckBypass::IsReturnAddressValid(uintptr_t retaddr) {
   PIPE_LOG_TRACE("");
 
   if (array_ptr == 0 || array_size == 0) {
-    PIPE_LOG_ERROR("ERROR: Invalid table configuration!");
+    PIPE_LOG_TRACE("ERROR: Invalid table configuration!");
     return;
   }
 
@@ -158,9 +187,9 @@ void RetcheckBypass::IsReturnAddressValid(uintptr_t retaddr) {
   }
 
   if (found_linear) {
-    PIPE_LOG("  FOUND at index {}", linear_index);
+    PIPE_LOG_TRACE("  FOUND at index {}", linear_index);
   } else {
-    PIPE_LOG_ERROR("  NOT FOUND");
+    PIPE_LOG_TRACE("  NOT FOUND");
   }
 
   PIPE_LOG_TRACE("Performing Binary Search");
@@ -196,10 +225,10 @@ void RetcheckBypass::IsReturnAddressValid(uintptr_t retaddr) {
     }
 
     if (found_binary) {
-      PIPE_LOG("  FOUND at index {}", binary_index);
+      PIPE_LOG_TRACE("  FOUND at index {}", binary_index);
     } else {
-      PIPE_LOG_ERROR("  NOT FOUND");
-      PIPE_LOG_ERROR("  indices: v11={} (0x{:08X}), v10={} (0x{:08X})", v11, array_ptr[v11], v10, array_ptr[v10]);
+      PIPE_LOG_TRACE("  NOT FOUND");
+      PIPE_LOG_TRACE("  indices: v11={} (0x{:08X}), v10={} (0x{:08X})", v11, array_ptr[v11], v10, array_ptr[v10]);
     }
   }
   PIPE_LOG_TRACE("");
@@ -213,27 +242,26 @@ void RetcheckBypass::IsReturnAddressValid(uintptr_t retaddr) {
     PIPE_LOG_TRACE("  ... ({} more entries)", array_size - 10);
   }
 
-  PIPE_LOG("Results");
+  PIPE_LOG_TRACE("Results");
   if (found_linear && found_binary) {
-    PIPE_LOG_ERROR("SUCCESS: Algorithm is CORRECT!");
-    PIPE_LOG_ERROR("The obfuscated value was found using both methods.");
+    PIPE_LOG_TRACE("SUCCESS: Algorithm is CORRECT!");
+    PIPE_LOG_TRACE("The obfuscated value was found using both methods.");
   } else if (found_linear && !found_binary) {
-    PIPE_LOG_ERROR("WARNING: Found via linear scan but NOT binary search.");
-    PIPE_LOG_ERROR("This suggests the array may not be properly sorted.");
+    PIPE_LOG_TRACE("WARNING: Found via linear scan but NOT binary search.");
+    PIPE_LOG_TRACE("This suggests the array may not be properly sorted.");
   } else {
-    PIPE_LOG_ERROR("FAILURE: Value not found in table.");
-    PIPE_LOG_ERROR("Possible causes:");
-    PIPE_LOG_ERROR("  1. Obfuscation algorithm is incorrect");
-    PIPE_LOG_ERROR("  2. Wrong constant[c6] value");
-    PIPE_LOG_ERROR("  3. Wrong image_base value");
-    PIPE_LOG_ERROR("  4. Return address is invalid");
+    PIPE_LOG_TRACE("FAILURE: Value not found in table.");
+    PIPE_LOG_TRACE("Possible causes:");
+    PIPE_LOG_TRACE("  1. Obfuscation algorithm is incorrect");
+    PIPE_LOG_TRACE("  2. Wrong constant[c6] value");
+    PIPE_LOG_TRACE("  3. Wrong image_base value");
+    PIPE_LOG_TRACE("  4. Return address is invalid");
   }
 }
 
 bool RetcheckBypass::Backup() {
   if (is_backed_up()) {
-    PIPE_LOG_ERROR("Table already backed up!");
-    return false;
+    return true;
   }
 
   RetCheckData* data_ptr = kCheckData;

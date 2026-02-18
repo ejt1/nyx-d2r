@@ -268,7 +268,7 @@ bool AutomapReveal(D2ActiveRoomStrc* hRoom) {
   uint32_t current_layer_id = -1;
   uint32_t level_id = 0;
   D2LevelDefBin* level_def = nullptr;
-  D2AutomapLayerStrc* inited;
+  D2AutomapLayerStrc* inited = nullptr;
   D2AutomapLayerStrc* current = *s_currentAutomapLayer;
 
   if (player) {
@@ -354,6 +354,7 @@ bool RevealLevelById(uint32_t id) {
       return false;  // failed to init level
     }
   }
+  RetcheckFunction pfnAutomap(reinterpret_cast<void (*)(D2ActiveRoomStrc*)>(drlg->pfnAutomap));
   for (D2DrlgRoomStrc* drlg_room = level->ptRoomFirst; drlg_room; drlg_room = drlg_room->ptDrlgRoomNext) {
     if (drlg_room->hRoom == nullptr) {
       ROOMS_AddRoomData(player->nDataTblsIndex,
@@ -367,9 +368,7 @@ bool RevealLevelById(uint32_t id) {
       PIPE_LOG("Failed to add room data");
       return false;
     }
-    if (!AutomapReveal(drlg_room->hRoom)) {
-      return false;
-    }
+    pfnAutomap(drlg_room->hRoom);
   }
   return true;
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "d2r_structs.h"
+
 #include <dolos/offset_types.h>
 
 #include <cstddef>
@@ -70,10 +72,6 @@ using dolos::OffsetType;
   V(EncTransformValue, "E8 ^ ? ? ? 44 39 45")                                                                          \
   V(EncEncryptionKeys, "48 8B 05 ^ ? ? ? 8B 80")                                                                       \
   V(PlayerIndexToIDEncryptedTable, "48 8D 15 ^ ? ? ? 8B DF")
-
-#define DECLARE_OFFSET(...) extern void* D2R_GET_VAR(__VA_ARGS__);
-D2R_OFFSET_LIST(DECLARE_OFFSET)
-#undef DECLARE_OFFSET
 
 constexpr std::size_t kOffsetCount = 0
 #define COUNT_OFFSET(...) +1

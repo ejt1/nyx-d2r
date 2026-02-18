@@ -1,8 +1,12 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace d2r {
+
+inline void* D2Allocator;
+inline void* BcAllocator;
 
 struct D2ActiveRoomStrc;
 struct D2DrlgLevelStrc;
@@ -444,5 +448,28 @@ static_assert(sizeof(D2UnitStrc) == 0x1C0);
 
 constexpr size_t kUnitHashTableCount = 128;
 typedef D2UnitStrc* EntityHashTable[kUnitHashTableCount];
+inline EntityHashTable* sgptClientSideUnitHashTable;
+
+// function definitions
+inline D2DrlgLevelStrc* (*DRLG_AllocLevel)(uint8_t, D2DrlgStrc*, uint32_t);
+inline void (*DRLG_InitLevel)(uint8_t, D2DrlgLevelStrc*);
+inline void (*ROOMS_AddRoomData)(uint8_t, void*, int32_t, uint32_t, uint32_t, D2ActiveRoomStrc*);
+inline D2LevelDefBin* (*GetLevelDef)(uint8_t, uint32_t);
+inline D2AutomapLayerStrc** s_automapLayerLink;
+inline D2AutomapLayerStrc** s_currentAutomapLayer;
+inline void (*ClearLinkedList)(D2LinkedList<D2AutomapCellStrc>*);
+inline void* (*AUTOMAP_NewAutomapCell)(D2LinkedList<D2AutomapCellStrc>*, void*, void*);
+inline void* (*AUTOMAP_AddAutomapCell)(D2LinkedList<D2AutomapCellStrc>*, D2AutomapCellStrc*);
+
+inline void** sgptDataTbls;  // unused
+inline uint32_t (*DATATBLS_GetAutomapCellId)(int32_t, int32_t, int32_t, int32_t);
+
+inline uint32_t* s_PlayerUnitIndex;
+inline EntityHashTable* (*GetClientSideUnitHashTableByType)(uint32_t);
+inline EntityHashTable* (*GetServerSideUnitHashTableByType)(uint32_t);
+// fixme: can call GetPlayerUnit directly instead of decrypting the pointer using retcheck bypass
+inline uint32_t (*EncTransformValue)(uint32_t*);
+inline uintptr_t* EncEncryptionKeys;
+inline uint32_t* PlayerIndexToIDEncryptedTable;
 
 }  // namespace d2r

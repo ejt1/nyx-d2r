@@ -56,21 +56,19 @@ static void GetPlayerIdByIndex(const FunctionCallbackInfo<Value>& args) {
 }
 
 static void GetLocalPlayerIndex(const FunctionCallbackInfo<Value>& args) {
-  args.GetReturnValue().Set(*(uint32_t*)s_PlayerUnitIndex);
+  args.GetReturnValue().Set(*s_PlayerUnitIndex);
 }
 
 void GetClientSideUnitHashTableAddress(const FunctionCallbackInfo<Value>& args) {
   Isolate* isolate = args.GetIsolate();
-  typedef void* (*GetClientSideUnitHashTableByTypeFn)(uint32_t);
-  void* addr = reinterpret_cast<GetClientSideUnitHashTableByTypeFn>(GetClientSideUnitHashTableByType)(0);
-  args.GetReturnValue().Set(BigInt::NewFromUnsigned(isolate, reinterpret_cast<uint64_t>(addr)));
+  uint64_t addr = reinterpret_cast<uint64_t>(GetClientSideUnitHashTableByType(0));
+  args.GetReturnValue().Set(BigInt::NewFromUnsigned(isolate, addr));
 }
 
 void GetServerSideUnitHashTableAddress(const FunctionCallbackInfo<Value>& args) {
   Isolate* isolate = args.GetIsolate();
-  typedef void* (*GetServerSideUnitHashTableByTypeFn)(uint32_t);
-  void* addr = reinterpret_cast<GetServerSideUnitHashTableByTypeFn>(GetServerSideUnitHashTableByType)(0);
-  args.GetReturnValue().Set(BigInt::NewFromUnsigned(isolate, reinterpret_cast<uint64_t>(addr)));
+  uint64_t addr = reinterpret_cast<uint64_t>(GetServerSideUnitHashTableByType(0));
+  args.GetReturnValue().Set(BigInt::NewFromUnsigned(isolate, addr));
 }
 
 void InitD2RBinding(nyx::IsolateData* isolate_data, Local<ObjectTemplate> target) {

@@ -18,10 +18,6 @@ using dolos::PatternScanner;
 using dolos::PEBuilder;
 using dolos::SignatureDef;
 
-#define DEFINE_OFFSET(...) void* D2R_GET_VAR(__VA_ARGS__) = nullptr;
-D2R_OFFSET_LIST(DEFINE_OFFSET)
-#undef DEFINE_OFFSET
-
 namespace {
 
 std::vector<SignatureDef> BuildSignatureList() {
@@ -32,7 +28,7 @@ std::vector<SignatureDef> BuildSignatureList() {
       D2R_GET_NAME(__VA_ARGS__),                                                                                       \
       D2R_GET_PATTERN(__VA_ARGS__),                                                                                    \
       D2R_GET_TYPE(__VA_ARGS__),                                                                                       \
-      &D2R_GET_VAR(__VA_ARGS__),                                                                                       \
+      (void**)&D2R_GET_VAR(__VA_ARGS__),                                                                               \
       0,                                                                                                               \
       std::nullopt, /* parsed pattern - lazy init */                                                                   \
   });

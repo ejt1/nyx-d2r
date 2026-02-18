@@ -16,7 +16,7 @@
 namespace d2r {
 
 D2UnitStrc* GetUnit(uint32_t id, uint32_t type) {
-  EntityHashTable* client_units = reinterpret_cast<EntityHashTable*>(sgptClientSideUnitHashTable);
+  EntityHashTable* client_units = sgptClientSideUnitHashTable;
   for (size_t i = id & 0x7F; i < kUnitHashTableCount; ++i) {
     D2UnitStrc* current = client_units[type][i];
     for (; current; current = current->pUnitNext) {
@@ -33,18 +33,13 @@ uint32_t GetPlayerId(uint32_t index) {
     return 0;
   };
 
-  uintptr_t key_table = reinterpret_cast<uintptr_t>(EncEncryptionKeys);
-  uintptr_t encryption_table = reinterpret_cast<uintptr_t>(PlayerIndexToIDEncryptedTable);
-  using transform_value_fn = uint32_t(__fastcall*)(uint32_t* value);
-  transform_value_fn transform_value = reinterpret_cast<transform_value_fn>(EncTransformValue);
-
-  uint32_t key = *(uint32_t*)(*(uintptr_t*)key_table + 0x146);
-  uint32_t encrypted = *(uint32_t*)(encryption_table + index * 4ULL);
+  uint32_t key = *(uint32_t*)(*EncEncryptionKeys + 0x146);
+  uint32_t encrypted = PlayerIndexToIDEncryptedTable[index];
   // TODO: find xor values using patterns
   uint32_t temp = (encrypted ^ key ^ 0x8633C320) + 0x53D5CDD3;
   uint32_t v = std::rotl(std::rotl(temp, 9), 7);
   // transform doesn't seem to do anything, keep for now but can probably be removed.
-  uint32_t id = transform_value(&v);
+  uint32_t id = EncTransformValue(&v);
 
   if (id == 0xFFFFFFFFu) {
     return 0;
@@ -73,8 +68,8 @@ static void* D2Alloc(size_t size, size_t align = 0x10) {
 }
 
 static D2AutomapLayerStrc* InitAutomapLayer(int32_t layer_id) {
-  D2AutomapLayerStrc* link = *static_cast<D2AutomapLayerStrc**>(s_automapLayerLink);
-  D2AutomapLayerStrc* current = *static_cast<D2AutomapLayerStrc**>(s_currentAutomapLayer);
+  D2AutomapLayerStrc* link = *s_automapLayerLink;
+  D2AutomapLayerStrc* current = *s_currentAutomapLayer;
   if (link != nullptr) {
     while (link->dwLayerID != layer_id) {
       link = link->prev;
@@ -115,21 +110,20 @@ static D2AutomapLayerStrc* InitAutomapLayer(int32_t layer_id) {
     }
     // this will crash if link was not allocated, but this is how Blizztard does it...
     // I could do better but... why?
-    link->prev = *static_cast<D2AutomapLayerStrc**>(s_automapLayerLink);
+    link->prev = *s_automapLayerLink;
     link->dwLayerID = layer_id;
-    *static_cast<D2AutomapLayerStrc**>(s_automapLayerLink) = link;
+    *s_automapLayerLink = link;
   }
   if (link != current) {
-    return nullptr; // bugs out, fix me
+    return nullptr;  // bugs out, fix me
     PIPE_LOG("Replace automap layer with {:p} old {:p}", static_cast<void*>(link), static_cast<void*>(current));
     if (current) {
-      auto clear_list = reinterpret_cast<void (*)(D2LinkedList<D2AutomapCellStrc>*)>(ClearLinkedList);
-      clear_list(&current->visible_floors);
-      clear_list(&current->visible_walls);
-      clear_list(&current->visible_objects);
-      clear_list(&current->visible_extras);
+      ClearLinkedList(&current->visible_floors);
+      ClearLinkedList(&current->visible_walls);
+      ClearLinkedList(&current->visible_objects);
+      ClearLinkedList(&current->visible_extras);
     }
-    *static_cast<D2AutomapLayerStrc**>(s_currentAutomapLayer) = link;
+    *s_currentAutomapLayer = link;
   }
   return link;
 }
@@ -144,9 +138,8 @@ static void RevealAutomapCells(uint8_t datatbls_index,
     return;  // already revealed
   }
   tile_data->dwFlags |= 0x40000;  // set revealed flag
-  level_def = reinterpret_cast<D2LevelDefBin* (*)(uint8_t, uint32_t)>(GetLevelDef)(datatbls_index,
-                                                                                   drlg_room->ptLevel->eLevelId);
-  uint32_t cell_id = reinterpret_cast<uint32_t (*)(int32_t, int32_t, int32_t, int32_t)>(DATATBLS_GetAutomapCellId)(
+  level_def = GetLevelDef(datatbls_index, drlg_room->ptLevel->eLevelId);
+  uint32_t cell_id = DATATBLS_GetAutomapCellId(
       level_def->dwLevelType, tile_data->ptTile->nType, tile_data->ptTile->nStyle, tile_data->ptTile->nSequence);
 
   if (cell_id == -1u) {
@@ -199,8 +192,7 @@ static void RevealAutomapCells(uint8_t datatbls_index,
   };
   Link link;
   // PIPE_LOG("new automap cell");
-  Link* ret = reinterpret_cast<Link* (*)(D2LinkedList<D2AutomapCellStrc>*, Link*, D2AutomapInitData*)>(
-      AUTOMAP_NewAutomapCell)(cells, &link, &init_data);
+  Link* ret = static_cast<Link*>(AUTOMAP_NewAutomapCell(cells, &link, &init_data));
   if (ret == nullptr) {
     PIPE_LOG("Failed to allocate automap cell");
     return;
@@ -237,14 +229,12 @@ static void RevealAutomapCells(uint8_t datatbls_index,
       cells->sentinel = (D2LinkedList<D2AutomapCellStrc>*)new_cell;
     }
     if (prev_cell != (D2AutomapCellStrc*)cells->tail || prev_next_ptr != &prev_cell->N00000B37) {
-      reinterpret_cast<void* (*)(D2LinkedList<D2AutomapCellStrc>*, D2AutomapCellStrc*)>(AUTOMAP_AddAutomapCell)(
-          cells, new_cell);
+      AUTOMAP_AddAutomapCell(cells, new_cell);
       return;
     }
   }
   cells->tail = (D2LinkedList<D2AutomapCellStrc>*)new_cell;
-  reinterpret_cast<void* (*)(D2LinkedList<D2AutomapCellStrc>*, D2AutomapCellStrc*)>(AUTOMAP_AddAutomapCell)(cells,
-                                                                                                            new_cell);
+  AUTOMAP_AddAutomapCell(cells, new_cell);
 }
 
 static void RevealRoom(uint8_t datatbls_index,
@@ -273,13 +263,13 @@ static void RevealRoom(uint8_t datatbls_index,
 }
 
 bool AutomapReveal(D2ActiveRoomStrc* hRoom) {
-  D2UnitStrc* player = GetPlayerUnit(*(uint32_t*)s_PlayerUnitIndex);
+  D2UnitStrc* player = GetPlayerUnit(*s_PlayerUnitIndex);
   uint8_t datatbls_index = 0;
   uint32_t current_layer_id = -1;
   uint32_t level_id = 0;
   D2LevelDefBin* level_def = nullptr;
   D2AutomapLayerStrc* inited;
-  D2AutomapLayerStrc* current = *static_cast<D2AutomapLayerStrc**>(s_currentAutomapLayer);
+  D2AutomapLayerStrc* current = *s_currentAutomapLayer;
 
   if (player) {
     datatbls_index = player->nDataTblsIndex;
@@ -293,7 +283,7 @@ bool AutomapReveal(D2ActiveRoomStrc* hRoom) {
     level_id = hRoom->ptDrlgRoom->ptLevel->eLevelId;
   }
 
-  level_def = reinterpret_cast<D2LevelDefBin* (*)(uint8_t, uint32_t)>(GetLevelDef)(datatbls_index, level_id);
+  level_def = GetLevelDef(datatbls_index, level_id);
   inited = InitAutomapLayer(level_def->dwLayer);
   if (inited == nullptr) {
     return false;
@@ -312,7 +302,7 @@ bool RevealLevelById(uint32_t id) {
     return false;
   }
 
-  D2UnitStrc* player = GetPlayerUnit(*(uint32_t*)s_PlayerUnitIndex);
+  D2UnitStrc* player = GetPlayerUnit(*s_PlayerUnitIndex);
   if (player == nullptr) {
     PIPE_LOG("No player");
     return false;
@@ -338,8 +328,7 @@ bool RevealLevelById(uint32_t id) {
   }
   if (level == nullptr) {
     // alloc level
-    level = reinterpret_cast<D2DrlgLevelStrc* (*)(uint8_t, D2DrlgStrc*, uint32_t)>(DRLG_AllocLevel)(
-        player->nDataTblsIndex, drlg, id);
+    level = DRLG_AllocLevel(player->nDataTblsIndex, drlg, id);
     if (level == nullptr) {
       PIPE_LOG("Failed to allocate level");
       return false;  // failed to alloc
@@ -367,13 +356,12 @@ bool RevealLevelById(uint32_t id) {
   }
   for (D2DrlgRoomStrc* drlg_room = level->ptRoomFirst; drlg_room; drlg_room = drlg_room->ptDrlgRoomNext) {
     if (drlg_room->hRoom == nullptr) {
-      reinterpret_cast<void (*)(uint8_t, void*, int32_t, uint32_t, uint32_t, D2ActiveRoomStrc*)>(ROOMS_AddRoomData)(
-          player->nDataTblsIndex,
-          drlg_room->ptLevel->ptDrlg->ptAct,
-          drlg_room->ptLevel->eLevelId,
-          drlg_room->tRoomCoords.nBackCornerTileX,
-          drlg_room->tRoomCoords.nBackCornerTileY,
-          drlg_room->hRoom);
+      ROOMS_AddRoomData(player->nDataTblsIndex,
+                        drlg_room->ptLevel->ptDrlg->ptAct,
+                        drlg_room->ptLevel->eLevelId,
+                        drlg_room->tRoomCoords.nBackCornerTileX,
+                        drlg_room->tRoomCoords.nBackCornerTileY,
+                        drlg_room->hRoom);
     }
     if (drlg_room->hRoom == nullptr) {
       PIPE_LOG("Failed to add room data");

@@ -59,7 +59,16 @@ using dolos::OffsetType;
   V(ClearLinkedList, "E8 ^ ? ? ? 48 8D 3D ? ? ? ? 48 8D 2D")                                                           \
   V(AUTOMAP_NewAutomapCell, "E8 ^ ? ? ? 48 8B 75 ? 48 85 F6 0F 84 ? ? ? ? E8 ? ? ? ? 8D 57")                           \
   V(AUTOMAP_AddAutomapCell, "E8 ^ ? ? ? 4D 89 1F")                                                                     \
+                                                                                                                       \
+  /* Widget offsets */                                                                                                 \
+  V(Widget::GetScaledPosition, "E8 ^ ? ? ? 8B 10 8B 48")                                                               \
+  V(Widget::GetScaledSize, "E8 ^ ? ? ? 41 3B F3")                                                                      \
+  V(PanelManager::GetScreenSizeX, "E8 ^ ? ? ? 0F 57 C0 0F 57 FF")                                                       \
+  V(s_panelManager, "0F 84 ? ? ? ? 48 8B 05 ^ ? ? ? 0F 57 C9")                                                         \
   V(AutoMapPanel_GetMode, "E8 ^ ? ? ? 83 F8 ? 75 ? 33 D2 48 8B CF")                                                    \
+  V(AutoMapPanel_CreateAutoMapData, "4C 89 44 24 ? 53 55 56 57 41 54 41 56")                                           \
+  V(AutoMapPanel_PrecisionToAutomap, "48 89 5C 24 ? 55 56 57 48 8B EC 48 83 EC ? 49 8B D8")                            \
+  V(AutoMapPanel_spdwShift, "8B 0D ^ ? ? ? 8B 35")                                                                     \
                                                                                                                        \
   /* Data table offsets*/                                                                                              \
   V(sgptDataTbls, "48 8D 15 ^ ? ? ? 49 8B 9E")                                                                         \

@@ -32,13 +32,464 @@ struct D2UnitStrc;
 
 template <typename T>
 class vector {
- public:
-  T* m_data;          // 0x0000
-  char pad_0008[16];  // 0x0008
-};  // Size: 0x0018
-static_assert(sizeof(vector<void*>) == 0x18);
+  using ref_t = std::conditional_t<std::is_pointer_v<T>, T, T*>;
 
+ public:
+  ref_t operator[](size_t idx) {
+    if (idx >= m_size) return nullptr;
+
+    if constexpr (std::is_pointer_v<T>) {
+      return m_elements[idx];
+    } else {
+      return &m_elements[idx];
+    }
+  }
+
+  size_t size() { return m_size; }
+
+  size_t capacity() { return m_capacity; }
+
+  T* begin() { return m_elements; }
+
+  T* end() { return &m_elements[m_size]; }
+
+  T* m_elements;                      // 0x0000
+  size_t m_size;                      // 0x0008
+  size_t m_capacity : 63;             // 0x0010
+  size_t m_capacity_is_embedded : 1;  // 0x0010
+};  // Size = 0x0018
+static_assert(sizeof(vector<void>) == 0x0018);
+
+template <typename T>
+struct Vector2 {
+  Vector2() {
+    x = static_cast<T>(0);
+    y = static_cast<T>(0);
+  }
+
+  Vector2(T _x, T _y) {
+    x = _x;
+    y = _y;
+  }
+
+  Vector2(const Vector2<T>& other) { *this = other; }
+
+  // Negative
+  Vector2<T> operator-() const { return Vec2(-x, -y); }
+
+  // Assign
+  Vector2<T>& operator=(const Vector2<T>& other) {
+    x = other.x;
+    y = other.y;
+    return *this;
+  }
+
+  // Addition
+  Vector2<T> operator+(const Vector2<T>& v) const { return Vector2<T>(x + v.x, y + v.y); }
+
+  Vector2<T>& operator+=(const Vector2<T>& v) {
+    x += v.x;
+    y += v.y;
+    return *this;
+  }
+
+  Vector2<T> operator+(const T val) const { return Vector2<T>(x + val, y + val); }
+
+  Vector2<T>& operator+=(const T val) {
+    x += val;
+    y += val;
+    return *this;
+  }
+
+  // Subtraction
+  Vector2<T> operator-(const Vector2<T>& v) const { return Vector2<T>(x - v.x, y - v.y); }
+
+  Vector2<T>& operator-=(const Vector2<T>& v) {
+    x -= v.x;
+    y -= v.y;
+    return *this;
+  }
+
+  Vector2<T> operator-(const T val) const { return Vector2<T>(x - val, y - val); }
+
+  Vector2<T>& operator-=(const T val) {
+    x -= val;
+    y -= val;
+    return *this;
+  }
+
+  // Multiplication
+  Vector2<T> operator*(const Vector2<T>& v) const { return Vector2<T>(x * v.x, y * v.y); }
+
+  Vector2<T>& operator*=(const Vector2<T>& v) {
+    x *= v.x;
+    y *= v.y;
+    return *this;
+  }
+
+  Vector2<T> operator*(const T val) const { return Vector2<T>(x * val, y * val); }
+
+  Vector2<T>& operator*=(const T val) {
+    x *= val;
+    y *= val;
+    return *this;
+  }
+
+  // Division
+  Vector2<T> operator/(const Vector2<T>& v) const { return Vector2<T>(x / v.x, y / v.y); }
+
+  Vector2<T>& operator/=(const Vector2<T>& v) {
+    x /= v.x;
+    y /= v.y;
+    return *this;
+  }
+
+  Vector2<T> operator/(const T val) const {
+    T i = static_cast<T>(1.0f) / val;
+    return Vector2<T>(x * i, y * i);
+  }
+
+  Vector2<T>& operator/=(const T val) {
+    T i = static_cast<T>(1.0f) / val;
+    x /= i;
+    y *= i;
+    return *this;
+  }
+
+  // Compare
+  bool operator==(const Vector2<T>& v) const { return (x == v.x) && (y == v.y); }
+
+  bool operator!=(const Vector2<T>& v) const { return (x != v.x) || (y != v.y); }
+
+  bool operator<=(const Vector2<T>& v) const { return (x < v.x && x == v.x) || (x == v.x && (y < v.y || y == v.y)); }
+
+  bool operator<(const Vector2<T>& v) const { return (x < v.x && x != v.x) || (x == v.x && (y < v.y || y != v.y)); }
+
+  bool operator>=(const Vector2<T>& v) const { return (x > v.x && x == v.x) || (x == v.x && (y > v.y || y == v.y)); }
+
+  bool operator>(const Vector2<T>& v) const { return (x > v.x && x != v.x) || (x == v.x && (y > v.y || y != v.y)); }
+
+  T x;
+  T y;
+};
+typedef Vector2<int32_t> Vector2i;
+typedef Vector2<uint32_t> Vector2u;
+typedef Vector2<float> Vector2f;
+typedef Vector2<double> Vector2d;
+
+template <typename T>
+struct RectT {
+  RectT<T>() : left(T(0)), top(T(0)), right(T(0)), bottom(T(0)) {}
+  RectT<T>(T x, T y, T w, T h) : left(x), top(y), right(w), bottom(h) {}
+  RectT<T>(Vector2<T> ptPosition, Vector2<T> ptSize) {
+    left = ptPosition.x;
+    top = ptPosition.y;
+    right = ptSize.x;
+    bottom = ptSize.y;
+  }
+
+  Vector2<T> center() { return {left + right / 2, top + bottom / 2}; }
+
+  T left;
+  T top;
+  T right;
+  T bottom;
+};
+
+typedef RectT<int> RectInt;
+typedef RectT<float> Rect;
+
+template <class _Elem, size_t Initial>
+struct basic_string {
+  _Elem* m_elements;                    // 0x0000
+  uint64_t m_size;                      // 0x0008
+  uint64_t m_capacity : 63;             // 0x0010
+  uint64_t m_capacity_is_embedded : 1;  // 0x0014
+  _Elem m_storage[Initial];             // 0x0018
+
+  // need proper BcAllocator implementation
+  // basic_string() {
+  //   m_elements = m_storage;
+  //   m_size = 0;
+  //   m_capacity = Initial;
+  //   m_capacity_is_embedded = 1;
+  //   memset(m_storage, 0, sizeof(_Elem) * Initial);
+  // }
+
+  // need proper BcAllocator implementation
+  // basic_string(const _Elem* ptr, const size_t count) {
+  //   m_elements = m_storage;
+  //   m_size = 0;
+  //   m_capacity = Initial;
+  //   m_capacity_is_embedded = 1;
+  //   memset(m_storage, 0, sizeof(_Elem) * Initial);
+  //   resize(count);
+  //   if (count) {
+  //     memcpy(m_elements, ptr, sizeof(_Elem) * count);
+  //   }
+  //   m_elements[count] = 0;
+  //   m_size = count;
+  // }
+
+  // need proper BcAllocator implementation
+  //~basic_string() {
+  //  if (!m_capacity_is_embedded) {
+  //    d2r::bcAllocatorWrap* allocator = d2r::MEMORY_BcAllocator();
+  //    allocator->Free(m_elements);
+  //  }
+  //}
+
+  operator _Elem*() { return m_elements; }
+
+  _Elem* c_str() { return m_elements; }
+
+  size_t length() { return m_size; }
+
+  size_t capacity() { return m_capacity; }
+
+  bool is_embedded() { return m_capacity_is_embedded; }
+
+  // need proper BcAllocator implementation
+  // void assign(const _Elem* ptr, size_t count) {
+  //   resize(count);
+  //   if (count) {
+  //     memcpy(m_elements, ptr, sizeof(_Elem) * count);
+  //   }
+  //   m_elements[count] = 0;
+  //   m_size = count;
+  // }
+
+  // need proper BcAllocator implementation
+  // void resize(size_t new_size) {
+  //   d2r::bcAllocatorWrap* allocator = d2r::MEMORY_BcAllocator();
+  //   // Calculate new capacity (grow by factor of 2)
+  //   if (new_size > m_capacity) {
+  //     size_t new_capacity = std::max(new_size, m_capacity * 2);
+  //     if (new_capacity < Initial) {
+  //       new_capacity = Initial;
+  //     }
+
+  //    // Allocate new memory
+  //    _Elem* new_elements = static_cast<_Elem*>(allocator->Allocate(sizeof(_Elem) * (new_capacity + 1), 0x10));
+
+  //    // Copy existing data
+  //    if (m_size != static_cast<size_t>(-1)) {
+  //      memcpy(new_elements, m_elements, sizeof(_Elem) * (m_size + 1));
+  //    } else {
+  //      // null terminate
+  //      new_elements[0] = 0;
+  //    }
+
+  //    if (!m_capacity_is_embedded) {
+  //      allocator->Free(m_elements);
+  //    }
+
+  //    m_elements = new_elements;
+  //    m_capacity = new_capacity;
+  //    m_capacity_is_embedded = 0;
+  //  }
+  //}
+};
+
+using string = basic_string<char, 15>;
+template <size_t Size>
+using string_sized = basic_string<char, Size>;
+
+using wstring = basic_string<wchar_t, 15>;
+template <size_t Size>
+using wstring_sized = basic_string<wchar_t, Size>;
+
+struct TypeDesc {
+  const char* szTypename;  // 0x0008
+  TypeDesc* ptBase;        // 0x0010
+  size_t N000012AC;        // 0x0018
+  uint64_t N000012AD;      // 0x0020
+  char pad_0028[16];       // 0x0028
+
+  virtual void Function0() = 0;
+  virtual void Function1() = 0;
+  virtual void Function2() = 0;
+  virtual void Function3() = 0;
+  virtual void Function4() = 0;
+  virtual void Function5() = 0;
+  virtual void Function6() = 0;
+  virtual void Function7() = 0;
+  virtual void Function8() = 0;
+  virtual void Function9() = 0;
+};  // Size: 0x0038
+static_assert(sizeof(TypeDesc) == 0x38);
+
+struct WidgetMessage {
+  uint64_t comp1;
+  uint64_t comp2;
+};
+
+struct Widget {
+  static inline Vector2i* (*GetScaledPosition)(Widget*, Vector2i*);
+  static inline Vector2i* (*GetScaledSize)(Widget*, Vector2i*);
+
+  string szName;               // 0x0008
+  Widget* ptParent;            // 0x0030
+  char pad_0038[16];           // 0x0038
+  float flRelativeX;           // 0x0048
+  float flRelativeY;           // 0x004C
+  bool bEnabled;               // 0x0050
+  bool bVisible;               // 0x0051
+  bool bRelative;              // 0x0052
+  bool unk_0053;               // 0x0053
+  float unk_0054;              // 0x0054
+  vector<Widget*> ptChildren;  // 0x0058
+  RectInt tAbsolute;           // 0x0070
+  float flScale;               // 0x0080
+  float unk_0084;              // 0x0084
+
+  virtual Widget* Destroy(uint8_t flag) { return nullptr; }
+  virtual __int64 vfunc_1() { return 0; }
+  virtual void Update() {}
+  virtual void Draw() {}
+  virtual bool OnMessage(WidgetMessage* ptMessage) { return false; }
+  virtual void vfunc_5(__int64) {}
+  virtual size_t OnShow() { return 0; }
+  virtual size_t OnHide() { return 0; }
+  virtual bool OnResize(size_t a1, size_t a2) { return false; }
+  virtual void SetEnabled(bool enabled) {}
+  virtual void SetVisible(bool visible) {}
+  virtual TypeDesc* RegisterType() { return nullptr; }
+
+  bool GetVisible() const { return bVisible; }
+
+  Widget* GetWidget(const char* name) {
+    if (_stricmp(szName, name) == 0) {
+      return this;
+    }
+
+    for (size_t i = 0; ptChildren[i]; ++i) {
+      Widget* ptChild = ptChildren[i]->GetWidget(name);
+      if (ptChild) return ptChild;
+    }
+
+    return nullptr;
+  }
+
+  Widget* GetWidget(Widget* widget) {
+    if (widget == this) {
+      return this;
+    }
+
+    for (size_t i = 0; ptChildren[i]; ++i) {
+      Widget* ptChild = ptChildren[i]->GetWidget(widget);
+      if (ptChild) {
+        return ptChild;
+      }
+    }
+
+    return nullptr;
+  }
+
+  float GetScale() {
+    if (ptParent) {
+      return ptParent->GetScale() * flScale;
+    }
+    return 1.0f * flScale;
+  }
+
+  RectInt* GetRect(RectInt* ptRect) {
+    if (bRelative) {
+      RectInt v4;
+      ptParent->GetRect(&v4);
+      ptRect->left = 0;
+      ptRect->top = 0;
+      ptRect->right = v4.right;
+      ptRect->bottom = v4.bottom;
+    } else {
+      *ptRect = tAbsolute;
+    }
+    return ptRect;
+  }
+};  // Size: 0x0088
+static_assert(sizeof(Widget) == 0x88);
+
+struct Button : Widget {
+  char pad_0088[960];     // 0x0088
+  uint64_t N00003567;     // 0x0448
+  char pad_0450[200];     // 0x0450
+  Widget* ptPanel;        // 0x0518
+  uint64_t tGuid[2];      // 0x0520
+  char* szOpenPanel;      // 0x0530
+  char pad_0538[8];       // 0x0538
+  uint64_t nFlags;        // 0x0540
+  Widget ptBackground;    // 0x0548
+  char pad_05D0[8];       // 0x05D0
+  uint32_t nAction;       // 0x05D8
+  char pad_05DC[124];     // 0x05DC
+  string* pszLargeIcon2;  // 0x0658
+  char pad_0660[232];     // 0x0660
+  string szText;          // 0x0748
+  char pad_0770[408];     // 0x0770
+  string szText2;         // 0x0908
+  char pad_0930[200];     // 0x0930
+
+  virtual void fn12(int) {}
+  virtual void fn13() {}
+  virtual void fn14() {}
+  virtual RectInt* GetScaledRect(RectInt* ptRect) { return nullptr; }
+  virtual uint32_t* fn16(uint32_t*) { return nullptr; }
+  virtual bool fn17() { return false; }
+  virtual uint64_t* fn18(uint64_t*) { return nullptr; }
+  virtual __int64 fn19() { return 0; }
+  virtual bool fn20() { return false; }
+  virtual __int64 Click() { return 0; }
+};  // Size: 0x09F8
+static_assert(sizeof(Button) == 0x9F8);
+
+class FocusManager {
+ public:
+  char pad_0000[368];     // 0x0000
+  Widget* ptHoverPanel;   // 0x0170
+  Widget* ptHoverWidget;  // 0x0178
+  char pad_0180[776];     // 0x0180
+};  // Size: 0x0488
+static_assert(sizeof(FocusManager) == 0x488);
+
+struct PanelManager : Widget {
+  static inline uint32_t (*GetScreenSizeX)();
+
+  vector<Widget> unk_0088;       // 0x0088
+  vector<Widget> unk_00A0;       // 0x00A0
+  bool bMouseWantCapture;        // 0x00B8
+  bool bIsHD;                    // 0x00B9
+  char pad_00BA[2];              // 0x00BA
+  uint32_t dwScreenWidth;        // 0x00BC
+  uint32_t dwScreenHeight;       // 0x00C0
+  char pad_00C4[4];              // 0x00C4
+  size_t ptGlobalData;           // 0x00C8
+  FocusManager* ptFocusManager;  // 0x00D0
+  char pad_00D8[16];             // 0x00D8
+};
+// Size: 0x00E8
+static_assert(sizeof(PanelManager) == 0xE8);
+inline PanelManager** s_panelManager;
+
+#pragma pack(push, 4)
+struct AutoMapData {
+  uint64_t unk_0000;
+  uint64_t unk_0008;
+  uint64_t unk_0010;
+  uint64_t unk_0018;
+  uint64_t unk_0020;
+  uint64_t unk_0028;
+  float unk_0030;
+  float unk_0034;
+  float unk_0038;
+};
+static_assert(sizeof(AutoMapData) == 0x3C);
+#pragma pack(pop)
+
+// fixme: move into AutoMapPanel : Panel struct
 inline RetcheckFunction<uint32_t> AutoMapPanel_GetMode;
+inline void (*AutoMapPanel_CreateAutoMapData)(AutoMapData*, RectInt*, uint64_t, float);
+inline RetcheckFunction<void, AutoMapData*, int64_t*, int64_t> AutoMapPanel_PrecisionToAutomap;
+inline uint32_t* AutoMapPanel_spdwShift;
 
 template <typename T>
 class D2LinkedList {
@@ -161,8 +612,8 @@ static_assert(sizeof(D2DrlgCoordsStrc) == 0x20);
 
 class D2CoordStrc {
  public:
-  int32_t wX;  // 0x0000
-  int32_t wY;  // 0x0004
+  int32_t nX;  // 0x0000
+  int32_t nY;  // 0x0004
 };  // Size: 0x0008
 static_assert(sizeof(D2CoordStrc) == 0x8);
 

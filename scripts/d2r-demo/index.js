@@ -2,12 +2,14 @@
 
 import { ObjectManager, UnitTypes, DebugPanel, revealLevel } from 'nyx:d2r';
 import { withGameLock } from 'nyx:memory';
+import { Markers } from './markers.js';
 
 const binding = internalBinding('d2r');
 
 try {
   const objMgr = new ObjectManager();
   const debugPanel = new DebugPanel(objMgr);
+  const markers = new Markers(objMgr);
 
   objMgr.tick();
 

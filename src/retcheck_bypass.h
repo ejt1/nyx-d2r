@@ -1,5 +1,6 @@
 #pragma once
 
+#include <intrin.h>
 #include <nyx/util.h>
 #include <cstdint>
 

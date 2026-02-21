@@ -8,18 +8,21 @@ template <typename R, typename... Args>
 inline void RetcheckFunction<R, Args...>::DoCall(R* result, Args... args) {
   FuncPtr cur_fn = dummy;
   do {
-    if (call_site) {
+    if (call_site != nullptr) {
       cur_fn = real_fn;
-      call_site = ProbeCallInstruction(call_site);
-      if (!call_site) {
-        PIPE_LOG("Call failed: Could not find call site");
+
+      if (real_call_site == nullptr) {
+        real_call_site = ProbeCallInstruction(call_site);
+        if (real_call_site == nullptr) {
+          PIPE_LOG("Call failed: Could not find call site");
+          return;
+        }
+      }
+      if (!RetcheckBypass::AddAddress(reinterpret_cast<uintptr_t>(real_call_site))) {
+        PIPE_LOG("Call failed: Could not add return address");
         return;
       }
-      if (!bypass.Patch(reinterpret_cast<uintptr_t>(call_site))) {
-        PIPE_LOG("Call failed: Could not patch return check");
-        return;
-      }
-      //bypass.ValidateReturnAddressValid(reinterpret_cast<uintptr_t>(call_site));
+      RetcheckBypass::SwapIn();
     }
     if constexpr (!std::is_void_v<R>) {
       *result = cur_fn(args...);
@@ -28,7 +31,7 @@ inline void RetcheckFunction<R, Args...>::DoCall(R* result, Args... args) {
     }
     call_site = GetCallSite();
   } while (cur_fn != real_fn);
-  bypass.Restore();
+  RetcheckBypass::SwapOut();
 }
 
 }  // namespace d2r

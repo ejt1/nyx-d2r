@@ -7,21 +7,15 @@ namespace d2r {
 
 class RetcheckBypass {
  public:
-  RetcheckBypass();
-  ~RetcheckBypass();
+  static bool Initialize();
+  static bool Shutdown();
 
-  bool Patch(uintptr_t return_address);
-  bool Restore();
-  void ValidateReturnAddressValid(uintptr_t retaddr);
+  static bool AddAddress(uintptr_t return_address);
 
-  bool is_backed_up() { return original_address_table_ptr_ != 0; }
+  static void SwapIn();
+  static void SwapOut();
 
- private:
-  bool Backup();
-
-  uintptr_t original_address_table_ptr_;
-  uint64_t original_image_base_;
-  uint64_t original_image_size_;
+  static void ValidateReturnAddressValid(uintptr_t retaddr);
 };
 
 static NYX_NOINLINE void* GetCallSite() {
@@ -53,7 +47,7 @@ struct RetcheckFunction {
   };
   FuncPtr real_fn = nullptr;
   void* call_site = nullptr;
-  RetcheckBypass bypass;
+  void* real_call_site = nullptr;
 
   RetcheckFunction() : real_fn(nullptr) {}
   RetcheckFunction(R (*fn)(Args...)) : real_fn(fn) {}

@@ -14,6 +14,10 @@ namespace d2r {
 static std::vector<uint32_t> s_patched_array;
 static RetCheckData::ReturnAddresses s_replacement_table;
 
+static uintptr_t s_original_address_table_ptr = 0;
+static uint64_t s_original_image_base = 0;
+static uint64_t s_original_image_size = 0;
+
 static const uint8_t sbox_30[16] = {
     0x05, 0x01, 0x0D, 0x09, 0x04, 0x02, 0x0B, 0x03, 0x0A, 0x07, 0x0C, 0x0E, 0x00, 0x06, 0x08, 0x0F};
 
@@ -60,90 +64,103 @@ static uint32_t get_constant_at_index(uint8_t* constants, size_t index) {
   return *reinterpret_cast<uint32_t*>(&constants[index]);
 }
 
-RetcheckBypass::RetcheckBypass() : original_address_table_ptr_(0), original_image_base_(0), original_image_size_(0) {}
-
-RetcheckBypass::~RetcheckBypass() {}
-
-bool RetcheckBypass::Patch(uintptr_t return_address) {
-  if (!Backup()) {
-    return false;
+bool RetcheckBypass::Initialize() {
+  if (!s_patched_array.empty()) {
+    return true;
   }
 
   RetCheckData* data_ptr = kCheckData;
+  if (data_ptr->addresses == nullptr) {
+    PIPE_LOG_ERROR("Original address table pointer is NULL!");
+    return false;
+  }
+  if (data_ptr->range == nullptr) {
+    PIPE_LOG_ERROR("Original image range pointer is NULL!");
+    return false;
+  }
+
+  // Back up original state.
+  s_original_address_table_ptr = reinterpret_cast<uintptr_t>(data_ptr->addresses);
+  s_original_image_base = reinterpret_cast<uintptr_t>(data_ptr->range->base);
+  s_original_image_size = data_ptr->range->size;
+
+  if (s_original_address_table_ptr == 0) {
+    PIPE_LOG_ERROR("Backed-up address table pointer is invalid!");
+    return false;
+  }
+
   RetCheckData::ReturnAddresses* address_table = data_ptr->addresses;
-  RetCheckData::ImageData* image_data = data_ptr->range;
-  uint8_t* constants = data_ptr->constants;
+  uint32_t constant = get_constant_at_index(data_ptr->constants, kConstantOffset);
+  uintptr_t real_image_base = reinterpret_cast<uintptr_t>(GetModuleHandle(nullptr));
 
-  image_data->base = 0;
-  image_data->size = std::numeric_limits<int64_t>::max();
-  uintptr_t stored_image_base = reinterpret_cast<uintptr_t>(image_data->base);
-  uint32_t constant = get_constant_at_index(constants, kConstantOffset);
-
-  uint32_t obfuscated = obfuscate_return_address(return_address, stored_image_base, constant);
-
-  PIPE_LOG_TRACE("Patching integrity table:");
-  PIPE_LOG_TRACE("  Return Address: 0x{:016X}", return_address);
-  PIPE_LOG_TRACE("  Image Base: 0x{:p}", image_data->base);
-  PIPE_LOG_TRACE("  Image Size: 0x{}", image_data->size);
-  PIPE_LOG_TRACE("  Constant at +0x{:04X}: 0x{:08X}", kConstantOffset, constant);
-  PIPE_LOG_TRACE("  Obfuscated Value: 0x{:08X}", obfuscated);
-  PIPE_LOG_TRACE("  Address table pointer: {:p}", (void*)data_ptr->addresses->ptr);
-  PIPE_LOG_TRACE("  Address table count: {}", data_ptr->addresses->count);
-
-  // fixme: should only copy then only insert since game table never changes
-  // right now it reconstructs the replacement table every time a retcheck bypass function is called.
-  if (data_ptr->addresses != &s_replacement_table) {
-    uintptr_t real_image_base = reinterpret_cast<uintptr_t>(GetModuleHandle(nullptr));
-    s_patched_array.clear();
-    s_patched_array.reserve(address_table->count);
-    for (uint32_t i = 0; i < address_table->count; ++i) {
-      uint32_t offset = deobfuscate_return_address(address_table->ptr[i], constant);
-      uintptr_t retaddr = real_image_base + offset;
-      s_patched_array.push_back(obfuscate_return_address(retaddr, stored_image_base, constant));
-    }
-    std::sort(s_patched_array.begin(), s_patched_array.end());
+  s_patched_array.reserve(address_table->count);
+  for (uint32_t i = 0; i < address_table->count; ++i) {
+    uint32_t offset = deobfuscate_return_address(address_table->ptr[i], constant);
+    uintptr_t retaddr = real_image_base + offset;
+    s_patched_array.push_back(obfuscate_return_address(retaddr, 0, constant));
   }
-
-  auto it = std::lower_bound(s_patched_array.begin(), s_patched_array.end(), obfuscated);
-  if (it == s_patched_array.end() || *it != obfuscated) {
-    PIPE_LOG_TRACE("Inserting {:04X} into valid return address table", obfuscated);
-    s_patched_array.insert(it, obfuscated);
-  }
-
-  PIPE_LOG_TRACE("  Reusing global table at: 0x{:016X}", reinterpret_cast<uintptr_t>(s_patched_array.data()));
+  std::sort(s_patched_array.begin(), s_patched_array.end());
 
   s_replacement_table.ptr = s_patched_array.data();
   s_replacement_table.count = static_cast<uint32_t>(s_patched_array.size());
-  data_ptr->addresses = &s_replacement_table;
 
-  PIPE_LOG_TRACE("Table pointer updated successfully ({} entries)", s_patched_array.size());
+  PIPE_LOG_TRACE("RetcheckBypass: table built ({} entries)", s_patched_array.size());
   return true;
 }
 
-bool RetcheckBypass::Restore() {
-  if (!is_backed_up()) {
-    PIPE_LOG("No backup to restore!");
+bool RetcheckBypass::Shutdown() {
+  if (s_patched_array.empty()) {
+    PIPE_LOG("RetcheckBypass: nothing to restore");
     return false;
   }
 
-  PIPE_LOG_TRACE("Restoring original integrity table pointer:");
-  PIPE_LOG_TRACE("  Original Table Pointer: 0x{:016X}", original_address_table_ptr_);
-  PIPE_LOG_TRACE("  Original Image base: 0x{:08X}", original_image_base_);
-  PIPE_LOG_TRACE("  Original Image size: 0x{}", original_image_size_);
+  RetCheckData* data_ptr = kCheckData;
+  data_ptr->addresses = reinterpret_cast<RetCheckData::ReturnAddresses*>(s_original_address_table_ptr);
+  data_ptr->range->base = reinterpret_cast<void*>(s_original_image_base);
+  data_ptr->range->size = s_original_image_size;
+
+  s_patched_array.clear();
+  s_original_address_table_ptr = 0;
+  s_original_image_base = 0;
+  s_original_image_size = 0;
+
+  PIPE_LOG_TRACE("RetcheckBypass: table restored");
+  return true;
+}
+
+void RetcheckBypass::SwapIn() {
+  RetCheckData* data_ptr = kCheckData;
+  data_ptr->range->base = 0;
+  data_ptr->range->size = std::numeric_limits<int64_t>::max();
+  data_ptr->addresses = &s_replacement_table;
+}
+
+void RetcheckBypass::SwapOut() {
+  RetCheckData* data_ptr = kCheckData;
+  data_ptr->addresses = reinterpret_cast<RetCheckData::ReturnAddresses*>(s_original_address_table_ptr);
+  data_ptr->range->base = reinterpret_cast<void*>(s_original_image_base);
+  data_ptr->range->size = s_original_image_size;
+}
+
+bool RetcheckBypass::AddAddress(uintptr_t return_address) {
+  if (s_patched_array.empty()) {
+    PIPE_LOG_ERROR("AddAddress called before Initialize");
+    return false;
+  }
 
   RetCheckData* data_ptr = kCheckData;
-  data_ptr->addresses = reinterpret_cast<RetCheckData::ReturnAddresses*>(original_address_table_ptr_);
-  data_ptr->range->base = reinterpret_cast<void*>(original_image_base_);
-  data_ptr->range->size = original_image_size_;
+  uint32_t constant = get_constant_at_index(data_ptr->constants, kConstantOffset);
+  uint32_t obfuscated = obfuscate_return_address(return_address, 0, constant);
 
-  PIPE_LOG_TRACE("Clearing global patched table ({} entries)", s_patched_array.size());
-  s_patched_array.clear();
+  auto it = std::lower_bound(s_patched_array.begin(), s_patched_array.end(), obfuscated);
+  if (it == s_patched_array.end() || *it != obfuscated) {
+    PIPE_LOG_TRACE("RetcheckBypass: adding return address 0x{:016X}", return_address);
+    s_patched_array.insert(it, obfuscated);
+    // Update pointer/count in case the vector reallocated.
+    s_replacement_table.ptr = s_patched_array.data();
+    s_replacement_table.count = static_cast<uint32_t>(s_patched_array.size());
+  }
 
-  original_image_size_ = 0;
-  original_image_base_ = 0;
-  original_address_table_ptr_ = 0;
-
-  PIPE_LOG_TRACE("Table pointer restored successfully");
   return true;
 }
 
@@ -257,37 +274,6 @@ void RetcheckBypass::ValidateReturnAddressValid(uintptr_t retaddr) {
     PIPE_LOG_TRACE("  3. Wrong image_base value");
     PIPE_LOG_TRACE("  4. Return address is invalid");
   }
-}
-
-bool RetcheckBypass::Backup() {
-  if (is_backed_up()) {
-    return true;
-  }
-
-  RetCheckData* data_ptr = kCheckData;
-  if (data_ptr->addresses == nullptr) {
-    PIPE_LOG_ERROR("Original address table pointer is NULL!");
-    return false;
-  }
-  if (data_ptr->range == nullptr) {
-    PIPE_LOG_ERROR("Original image range pointer is NULL!");
-    return false;
-  }
-  original_address_table_ptr_ = reinterpret_cast<uintptr_t>(data_ptr->addresses);
-  original_image_base_ = reinterpret_cast<uintptr_t>(data_ptr->range->base);
-  original_image_size_ = data_ptr->range->size;
-
-  if (original_address_table_ptr_ == 0) {
-    PIPE_LOG_ERROR("Backuped variables are invalid!");
-    return false;
-  }
-
-  PIPE_LOG_TRACE("Backing up return address table pointer:");
-  PIPE_LOG_TRACE("  Original Table Pointer: 0x{:016X}", original_address_table_ptr_);
-  PIPE_LOG_TRACE("  Original Image base: 0x{:08X}", original_image_base_);
-  PIPE_LOG_TRACE("  Original Image size: 0x{}", original_image_size_);
-
-  return true;
 }
 
 }  // namespace d2r

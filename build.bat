@@ -51,3 +51,23 @@ cmake --preset x64-release
 cmake --build out/build/x64-release
 cmake --install out/build/x64-release
 pause
+
+REM Copy scripts folder to "nyx-d2r\out\install\x64-release\bin\scripts"
+
+if exist "out\install\x64-release\bin\scripts\" (
+    echo Scripts folder already exists in install\x64-release\bin\ directory. Skipping copy.
+) else (
+    echo Scripts folder not found in install directory. Copying...
+
+    xcopy "scripts" "out\install\x64-release\bin\scripts" /s /e /i
+
+    if %errorlevel% neq 0 (
+        echo Error copying scripts folder.
+        pause
+        exit /b 1
+    )
+
+    echo Successfully copied scripts folder to "nyx-d2r\out\install\x64-release\bin\scripts".
+)
+
+pause

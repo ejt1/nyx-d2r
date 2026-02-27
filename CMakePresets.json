@@ -46,6 +46,33 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "x64-debug-local-nyx",
+      "displayName": "x64 Debug (Local Nyx)",
+      "description": "Debug build using a local Nyx source override (default: sibling ../nyx).",
+      "inherits": "x64-debug",
+      "cacheVariables": {
+        "NYX_SOURCE_OVERRIDE": "${sourceDir}/../nyx"
+      }
+    },
+    {
+      "name": "x64-release-local-nyx",
+      "displayName": "x64 Release (Local Nyx)",
+      "description": "RelWithDebInfo build using a local Nyx source override (default: sibling ../nyx).",
+      "inherits": "x64-release",
+      "cacheVariables": {
+        "NYX_SOURCE_OVERRIDE": "${sourceDir}/../nyx"
+      }
+    },
+    {
+      "name": "x64-dist-local-nyx",
+      "displayName": "x64 Dist (Local Nyx)",
+      "description": "Release build using a local Nyx source override (default: sibling ../nyx).",
+      "inherits": "x64-dist",
+      "cacheVariables": {
+        "NYX_SOURCE_OVERRIDE": "${sourceDir}/../nyx"
+      }
     }
   ]
 }
